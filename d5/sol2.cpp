@@ -4,6 +4,7 @@
 #include <fstream>
 #include <iostream>
 #include <chrono>
+#include <cmath>
 
 struct Range {
     int64_t low;
@@ -57,24 +58,38 @@ Input parseInput() {
     return input;
 }
 
-int solve() {
+int64_t solve() {
     Input input = parseInput();
     std::vector<Range> &ranges = input.ranges;
-    std::vector<int64_t> &ids = input.ids;
 
-    int cnt = 0;
+    // sort by low
     auto start = std::chrono::high_resolution_clock::now();
-    for (int64_t &id : ids) {
-        bool inRange = false;
-        for (auto &r : ranges) {
-            if (id >= r.low && id <= r.high) {
-                inRange = true;
-                break;
-            }
+    std::sort(ranges.begin(), ranges.end(), [](Range &r1, Range &r2) {
+        return r1.low < r2.low;
+    });
+
+    //
+    // merge
+    //
+    // l1 h1 l2 h2 -> (l1 h1) (l2 h2)
+    // l1 l2 h1 h2 -> (l1, h2)
+    // 
+    int n = ranges.size();
+    std::vector<Range> mergedRanges;
+    mergedRanges.push_back(ranges[0]);
+    for (int i = 1; i < n; i++) {
+        Range &r1 = mergedRanges.back();
+        Range &r2 = ranges[i];
+        if (r2.low <= r1.high) {
+            r1.high = std::max(r1.high, r2.high);
+        } else {
+            mergedRanges.push_back(r2);
         }
-        if (inRange) {
-            cnt += 1;
-        }
+    }
+
+    int64_t cnt = 0;
+    for (auto &r : mergedRanges) {
+        cnt += (r.high - r.low + 1);
     }
 
     auto end = std::chrono::high_resolution_clock::now();
@@ -86,7 +101,7 @@ int solve() {
 }
 
 int main() {
-    int res = solve();
+    int64_t res = solve();
     std::cout << res << "\n";
     return 0;
 }
