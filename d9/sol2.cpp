@@ -6,6 +6,7 @@
 #include <cassert>
 #include <cmath>
 #include <sstream>
+#include <unordered_set>
 
 struct Pos {
     int64_t x;
@@ -53,6 +54,19 @@ int64_t solve() {
     // smarter
     //      - something dfs-like?
     //
+
+    std::unordered_set<Pos> zone;
+    int n = positions.size();
+    for (int i = 0; i < n; i++) {
+        for (int j = i + 1; j < n; j++) {
+            Pos &p1 = positions[i];
+            Pos &p2 = positions[j];
+            int64_t dx = std::abs(p1.x - p2.x) + 1;
+            int64_t dy = std::abs(p1.y - p2.y) + 1;
+            maxArea = std::max(maxArea, dx * dy);
+            areas.push_back(dx * dy);
+        }
+    }
 
     return 0;
 }
