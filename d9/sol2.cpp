@@ -46,20 +46,17 @@ std::vector<Pos> parsePositions() {
 
 int64_t solve() {
 
-    /**
-     * Zone defined as follows:
-     *      - rows of ranges that are occupied, e.g. row 0 - {[0-2],[5-8]}, row 1 - {[4-6],[9-15]}, ...
-     *      
-     * Steps:
-     *      maxArea = -1
-     *      for each pair of red tiles
-     *          for each row they enclose
-     *              if leftmost col and rightmost col in different occupied sets => some part of row not in zone
-     *                  break
-     *          (rectangle entirely in zone at this point)
-     *          maxArea = max(maxArea, areaOfCurrRectangle)
-     *      return maxArea
-     */
+    //
+    // get list of border points
+    // line by line, add positions (or add ranges of positions)
+    // for each pair
+    //      for each row enclosed
+    //          if far left and far right are in distinct sets
+    //              break
+    //      (here, we know its valid rectangle inside zone)
+    //      maxArea = max(maxArea, areaOfCurrRectangle)
+    // return maxArea
+    //
 
     return 0;
 }
