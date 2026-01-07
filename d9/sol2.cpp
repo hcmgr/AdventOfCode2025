@@ -45,28 +45,21 @@ std::vector<Pos> parsePositions() {
 }
 
 int64_t solve() {
-    //
-    // naive
-    //      - iterate each pair 
-    //      - check each position in rectangle is 'in the zone', have an unordered_set of zone positions to make fast
-    //      - probably too slow: (435^2) * average_enclosed_area == huge
-    //
-    // smarter
-    //      - something dfs-like?
-    //
 
-    std::unordered_set<Pos> zone;
-    int n = positions.size();
-    for (int i = 0; i < n; i++) {
-        for (int j = i + 1; j < n; j++) {
-            Pos &p1 = positions[i];
-            Pos &p2 = positions[j];
-            int64_t dx = std::abs(p1.x - p2.x) + 1;
-            int64_t dy = std::abs(p1.y - p2.y) + 1;
-            maxArea = std::max(maxArea, dx * dy);
-            areas.push_back(dx * dy);
-        }
-    }
+    /**
+     * Zone defined as follows:
+     *      - rows of ranges that are occupied, e.g. row 0 - {[0-2],[5-8]}, row 1 - {[4-6],[9-15]}, ...
+     *      
+     * Steps:
+     *      maxArea = -1
+     *      for each pair of red tiles
+     *          for each row they enclose
+     *              if leftmost col and rightmost col in different occupied sets => some part of row not in zone
+     *                  break
+     *          (rectangle entirely in zone at this point)
+     *          maxArea = max(maxArea, areaOfCurrRectangle)
+     *      return maxArea
+     */
 
     return 0;
 }
