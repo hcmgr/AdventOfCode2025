@@ -46,10 +46,10 @@ std::vector<Pos> parsePositions() {
 }
 
 //
-// Given series of un-overlapping ranges `ranges`, returns index of the range that `el` lies in.
+// Given series of non-overlapping ranges `ranges`, returns index of the range that `el` lies in.
 // Returns -1 if `el` sits in none of the ranges.
 //
-int findRange(int64_t el, std::vector<std::pair<int64_t, int64_t>> &ranges) {
+int findRangeOfEl(int64_t el, std::vector<std::pair<int64_t, int64_t>> &ranges) {
     int n = ranges.size();
     for (int i = 0; i < n; i++) {
         auto r = ranges[i];
@@ -60,30 +60,43 @@ int findRange(int64_t el, std::vector<std::pair<int64_t, int64_t>> &ranges) {
     return -1;
 }
 
+//
+// From sorted list `els`, compute ranges of contiguous elements.
+//
+// For example:
+//      {1,2,4,5,6,9,10,11,13} => {[1,2], [4,6], [9,11], [13,13]}
+//
+std::vector<std::pair<int64_t, int64_t>> computeRanges(std::vector<int64_t> &els) {
+    std::vector<std::pair<int64_t, int64_t>> res;
+    int n = els.size();
+    int i = 0;
+    while (i < n) {
+        int64_t currMin = els[i];
+        while (i + 1 < n && els[i+1] == els[i] + 1) {
+            i++;
+        }
+        res.push_back({currMin, els[i]});
+        i++;
+    }
+    return res;
+}
+
 int64_t solve() {
     std::vector<Pos> redPositions = parsePositions();
     int nRed = redPositions.size();
 
     //
-    // Calculate border positions
+    // Calculate border positions - mapping of form: row_num -> {posi, posj, ...}, each row sorted.
     //
-    std::vector<Pos> borderPositions;
-    borderPositions.push_back(redPositions[0]);
-    for (int i = 1; i < nRed; i++) {
-        Pos& prev = redPositions[i - 1];
-        Pos& curr = redPositions[i];
-        borderPositions.push_back(curr);
-
-        //
-        // fill positions between `prev` and `curr`
-        //
+    std::unordered_map<int64_t, std::vector<int64_t>> borderPositions;
+    auto fillBetween = [&](Pos& prev, Pos& curr) {
         if (prev.x == curr.x) {
             // vertical case
             int dy = curr.y > prev.y ? 1 : -1;
             int64_t x = prev.x;
             int64_t y = prev.y + dy;
             while (y != curr.y) {
-                borderPositions.push_back({x, y});
+                borderPositions[y].push_back(x);
                 y += dy;
             }
         } 
@@ -93,7 +106,7 @@ int64_t solve() {
             int64_t x = prev.x + dx;
             int64_t y = prev.y;
             while (x != curr.x) {
-                borderPositions.push_back({x, y});
+                borderPositions[y].push_back(x);
                 x += dx;
             }
         } 
@@ -101,21 +114,41 @@ int64_t solve() {
             std::cout << "bad position pair" << "\n";
             assert(false);
         }
+    };
+
+    Pos initial = redPositions[0];
+    borderPositions[initial.y].push_back(initial.x);
+    for (int i = 1; i < nRed; i++) {
+        Pos& prev = redPositions[i - 1];
+        Pos& curr = redPositions[i];
+        borderPositions[curr.y].push_back(curr.x);
+        fillBetween(prev, curr);
+
+        if (i == nRed - 1) {
+            // at end - close loop
+            fillBetween(curr, initial);
+        }
     }
 
+    // ensure rows are sorted
     for (auto &p : borderPositions) {
-        std::cout << p.toString() << "\n";
+        auto &row = p.second;
+        std::sort(row.begin(), row.end());
     }
-
-    return 0;
 
     //
     // Build up the zone map. 
     //
-    // Mapping of the form: row_num -> {range0, range1, ...}, where rangeI is a range of 
+    // Mapping of the form: row_num -> {range0, range1, ...}, where rangei is a range of 
     // covered positions in that row, e.g. [0, 2] => positions 0,1,2 all in zone.
     //
     std::unordered_map<int64_t, std::vector<std::pair<int64_t, int64_t>>> zone;
+    for (auto &p : borderPositions) {
+        auto rowNum = p.first;
+        auto &row = p.second;
+
+        // TODO
+    }
 
     //
     // Iterate all red pairs to find valid rectangles (and max area one).
@@ -147,8 +180,8 @@ int64_t solve() {
             int dy = p1.y < p2.y ? 1 : -1;
             auto isRowConnected = [&](int64_t row) {
                 auto range = zone[row];
-                auto leftSideRange = findRange(p1.x, range);
-                auto rightSideRange = findRange(p2.x, range);
+                auto leftSideRange = findRangeOfEl(p1.x, range);
+                auto rightSideRange = findRangeOfEl(p2.x, range);
                 return leftSideRange != -1 && rightSideRange != -1 && leftSideRange == rightSideRange;
             };
 
@@ -177,8 +210,22 @@ int64_t solve() {
     return maxArea;
 }
 
+void testComputeRanges();
+
 int main() {
     int64_t res = solve();
     std::cout << res << "\n";
     return 0;
+}
+
+/////////////////////////////////
+// Testing
+/////////////////////////////////
+
+void testComputeRanges() {
+    std::vector<int64_t> els = {1,2,4,5,6,9,10,11,13,14,15,16,18};
+    auto ranges = computeRanges(els);
+    for (auto &r : ranges) {
+        std::cout << r.first << "-" << r.second << "\n";
+    }
 }
