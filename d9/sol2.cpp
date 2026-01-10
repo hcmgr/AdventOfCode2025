@@ -13,8 +13,20 @@ struct Pos {
     int64_t x;
     int64_t y;
 
+    bool operator==(const Pos& other) const {
+        return x == other.x && y == other.y;
+    }
+
     std::string toString() {
         return std::to_string(x) + "," + std::to_string(y);
+    }
+};
+
+struct PosHash {
+    size_t operator()(const Pos& p) const noexcept {
+        size_t h1 = std::hash<int64_t>{}(p.x);
+        size_t h2 = std::hash<int64_t>{}(p.y);
+        return h1 ^ (h2 + 0x9e3779b97f4a7c15ULL + (h1 << 6) + (h1 >> 2));
     }
 };
 
@@ -43,6 +55,25 @@ std::vector<Pos> parsePositions() {
     }
 
     return positions;
+}
+
+static std::vector<std::pair<int64_t, int64_t>> offs = {
+    {0, 1},
+    {1, 0},
+    {0, -1},
+    {-1, 0}
+};
+
+void dfsFloodFill(Pos curr, std::unordered_set<Pos, PosHash> &zone) {
+    zone.insert(curr);
+    for (auto &p : offs) {
+        int64_t nx = curr.x + p.first;
+        int64_t ny = curr.y + p.second;
+        Pos next = {nx, ny};
+        if (zone.find(next) == zone.end()) {
+            dfsFloodFill(next, zone);
+        }
+    }
 }
 
 //
@@ -84,11 +115,11 @@ std::vector<std::pair<int64_t, int64_t>> computeRanges(std::vector<int64_t> &els
 int64_t solve() {
     std::vector<Pos> redPositions = parsePositions();
     int nRed = redPositions.size();
+    std::unordered_set<Pos, PosHash> zone;
 
     //
-    // Calculate border positions - mapping of form: row_num -> {posi, posj, ...}, each row sorted.
+    // Calculate border positions
     //
-    std::unordered_map<int64_t, std::vector<int64_t>> borderPositions;
     auto fillBetween = [&](Pos& prev, Pos& curr) {
         if (prev.x == curr.x) {
             // vertical case
@@ -96,7 +127,7 @@ int64_t solve() {
             int64_t x = prev.x;
             int64_t y = prev.y + dy;
             while (y != curr.y) {
-                borderPositions[y].push_back(x);
+                zone.insert({x, y});
                 y += dy;
             }
         } 
@@ -106,7 +137,7 @@ int64_t solve() {
             int64_t x = prev.x + dx;
             int64_t y = prev.y;
             while (x != curr.x) {
-                borderPositions[y].push_back(x);
+                zone.insert({x, y});
                 x += dx;
             }
         } 
@@ -117,11 +148,11 @@ int64_t solve() {
     };
 
     Pos initial = redPositions[0];
-    borderPositions[initial.y].push_back(initial.x);
+    zone.insert({initial.x, initial.y});
     for (int i = 1; i < nRed; i++) {
         Pos& prev = redPositions[i - 1];
         Pos& curr = redPositions[i];
-        borderPositions[curr.y].push_back(curr.x);
+        zone.insert({curr.x, curr.y});
         fillBetween(prev, curr);
 
         if (i == nRed - 1) {
@@ -130,84 +161,103 @@ int64_t solve() {
         }
     }
 
-    // ensure rows are sorted
-    for (auto &p : borderPositions) {
-        auto &row = p.second;
-        std::sort(row.begin(), row.end());
-    }
+    //
+    // Fill in enclosed zone via dfs flood-fill.
+    //
+    // Note - initial position must be guaranteed inside zone.
+    //
+    Pos initialPos = {8, 2};
+    dfsFloodFill(initialPos, zone);
 
     //
-    // Build up the zone map. 
+    // Convert zone to row-indexed representation (`zoneRowRanges`) for easier search.
     //
     // Mapping of the form: row_num -> {range0, range1, ...}, where rangei is a range of 
     // covered positions in that row, e.g. [0, 2] => positions 0,1,2 all in zone.
     //
-    std::unordered_map<int64_t, std::vector<std::pair<int64_t, int64_t>>> zone;
-    for (auto &p : borderPositions) {
+    std::map<int64_t, std::vector<int64_t>> zoneRows;
+    for (auto &pos : zone) {
+        zoneRows[pos.y].push_back(pos.x);
+    }
+    
+    for (auto &p : zoneRows) {
         auto rowNum = p.first;
         auto &row = p.second;
-
-        // TODO
-    }
-
-    //
-    // Iterate all red pairs to find valid rectangles (and max area one).
-    // 
-    // Algorithm:
-    //
-    // for each pair of red positions
-    //      for each row enclosed
-    //          if far left and far right are in distinct sets => row not connected => rectangle not all in zone
-    //              break
-    //      (here, we know its valid rectangle inside zone)
-    //      maxArea = max(maxArea, areaOfCurrRectangle)
-    //
-    int64_t maxArea = INT64_MIN;
-    for (int i = 0; i < nRed; i++) {
-        for (int j = i + 1; j < nRed; j++) {
-            Pos p1 = redPositions[i];
-            Pos p2 = redPositions[j];
-
-            // make p1 the left position
-            if (p1.x > p2.x) {
-                std::swap(p1, p2);
-            }
-
-            //
-            // check that all the rows p1-p2 enclose are connected
-            //
-            int64_t y = p1.y;
-            int dy = p1.y < p2.y ? 1 : -1;
-            auto isRowConnected = [&](int64_t row) {
-                auto range = zone[row];
-                auto leftSideRange = findRangeOfEl(p1.x, range);
-                auto rightSideRange = findRangeOfEl(p2.x, range);
-                return leftSideRange != -1 && rightSideRange != -1 && leftSideRange == rightSideRange;
-            };
-
-            bool allRowsConnected = true;
-            while (y != p2.y) {
-                if (!isRowConnected(y)) {
-                    allRowsConnected = false;
-                    break;
-                }
-                y += dy;
-            }
-            if (!isRowConnected(y)) { // make sure also check p2.y
-                allRowsConnected = false;
-            }
-
-            if (!allRowsConnected) {
-                continue;
-            }
-
-            // at this point - we know rectangle is valid
-            int64_t area = (std::abs(p1.x - p2.x) + 1) * (std::abs(p1.y - p2.y) + 1);
-            maxArea = std::max(maxArea, area);
+        std::sort(row.begin(), row.end());
+        std::cout << rowNum << ": ";
+        for (auto &el : row) {
+            std::cout << el << " ";
         }
+        std::cout << "\n";
     }
 
-    return maxArea;
+    // std::unordered_map<int64_t, std::vector<std::pair<int64_t, int64_t>>> zoneRowRanges;
+    // for (auto &p : zoneRows) {
+    //     auto rowNum = p.first;
+    //     auto &row = p.second;
+    //     zoneRowRanges[rowNum] = computeRanges(row);
+    // }
+
+    return 0;
+
+    // //
+    // // Iterate all red pairs to find valid rectangles (and max area one).
+    // // 
+    // // Algorithm:
+    // //
+    // // for each pair of red positions
+    // //      for each row enclosed
+    // //          if far left and far right are in distinct sets => row not connected => rectangle not all in zone
+    // //              break
+    // //      (here, we know its valid rectangle inside zone)
+    // //      maxArea = max(maxArea, areaOfCurrRectangle)
+    // //
+    // int64_t maxArea = INT64_MIN;
+    // for (int i = 0; i < nRed; i++) {
+    //     for (int j = i + 1; j < nRed; j++) {
+    //         Pos p1 = redPositions[i];
+    //         Pos p2 = redPositions[j];
+
+    //         // make p1 the left position
+    //         if (p1.x > p2.x) {
+    //             std::swap(p1, p2);
+    //         }
+
+    //         //
+    //         // check that all the rows p1-p2 enclose are connected
+    //         //
+    //         int64_t y = p1.y;
+    //         int dy = p1.y < p2.y ? 1 : -1;
+    //         auto isRowConnected = [&](int64_t row) {
+    //             auto ranges = zone[row];
+    //             auto leftSideRange = findRangeOfEl(p1.x, ranges);
+    //             auto rightSideRange = findRangeOfEl(p2.x, ranges);
+    //             return leftSideRange != -1 && rightSideRange != -1 && leftSideRange == rightSideRange;
+    //         };
+
+    //         bool allRowsConnected = true;
+    //         while (y != p2.y) {
+    //             if (!isRowConnected(y)) {
+    //                 allRowsConnected = false;
+    //                 break;
+    //             }
+    //             y += dy;
+    //         }
+    //         if (!isRowConnected(y)) { // make sure also check p2.y
+    //             allRowsConnected = false;
+    //         }
+
+    //         if (!allRowsConnected) {
+    //             continue;
+    //         }
+
+    //         // at this point - we know rectangle is valid
+    //         int64_t area = (std::abs(p1.x - p2.x) + 1) * (std::abs(p1.y - p2.y) + 1);
+    //         maxArea = std::max(maxArea, area);
+    //     }
+    // }
+
+    // return maxArea;
 }
 
 void testComputeRanges();
