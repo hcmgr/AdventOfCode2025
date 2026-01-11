@@ -5,6 +5,8 @@
 #include <sstream>
 #include <cassert>
 #include <ostream>
+#include <queue>
+#include <cstdint>
 
 struct Machine {
     std::vector<bool> lights;
@@ -15,26 +17,34 @@ struct Machine {
         std::ostringstream oss;
 
         // lights
+        oss << "[";
         for (auto l : lights) {
             char c = l ? '#' : '.';
             oss << c;
         }
-        oss << " ";
+        oss << "] ";
 
         // buttons
         for (auto &button : buttons) {
-            oss << "( ";
-            for (auto &b : button) {
-                oss << b << " ";
+            oss << "(";
+            int n = button.size();
+            for (int i = 0; i < n; i++) {
+                oss << button[i];
+                if (i < n - 1) {
+                    oss << ",";
+                }
             }
-            oss << ")";
+            oss << ") ";
         }
-        oss << " ";
 
         // joltages
-        oss << "{ ";
-        for (auto &j : joltages) {
-            oss << j << " ";
+        oss << "{";
+        int n = joltages.size();
+        for (int i = 0; i < n; i++) {
+            oss << joltages[i];
+            if (i < n - 1) {
+                oss << ",";
+            }
         }
         oss << "}";
 
@@ -146,13 +156,35 @@ std::vector<Machine> parseMachines() {
     return machines;
 }
 
+int64_t dfs(int i, std::vector<bool> state, int64_t numPresses, const Machine &machine) {
+    if (i == machine.buttons.size()) {
+        if (state == machine.lights) {
+            return numPresses;
+        }
+        return INT64_MAX;
+    }
+
+    std::vector<bool> withState = state;
+    const auto &button = machine.buttons[i];
+    for (auto &lightIdx : button) {
+        withState[lightIdx] = !withState[lightIdx];
+    }
+
+    int64_t with = dfs(i+1, withState, numPresses + 1, machine);
+    int64_t without = dfs(i+1, state, numPresses, machine);
+    return std::min(with, without);
+}
+
 int64_t solve() {
     std::vector<Machine> machines = parseMachines();
-    std::cout << machines.size() << "\n";
+    int64_t total = 0;
+    int cnt = 0;
     for (auto &machine : machines) {
-        std::cout << machine.toString() << "\n";
+        int64_t minPresses = dfs(0, std::vector<bool>(machine.lights.size(), false), 0, machine);
+        total += minPresses;
+        cnt++;
     }
-    return 0;
+    return total;
 }
 
 int main() {
